@@ -6,19 +6,17 @@
 #define PORT 8888
 #define MAX_BUFFER_SIZE 1024
 
-char* play_round(int client_choice) {
-    int server_choice = rand() % 3;
-
-    if (client_choice == server_choice) {
+char* play_round(int client_choice1, int client_choice2) {
+    if (client_choice1 == client_choice2) {
         return "It's a tie!";
     } else if (
-        (client_choice == 0 && server_choice == 2) ||
-        (client_choice == 1 && server_choice == 0) ||
-        (client_choice == 2 && server_choice == 1)
+        (client_choice1 == 0 && client_choice2 == 2) ||
+        (client_choice1 == 1 && client_choice2 == 0) ||
+        (client_choice1 == 2 && client_choice2 == 1)
     ) {
-        return "You win!";
+        return "Client 1 wins!";
     } else {
-        return "You lose!";
+        return "Client 2 wins!";
     }
 }
 
@@ -73,8 +71,9 @@ int main() {
         connected_clients++;
     }
 
-    int client_choice;
-    char buffer[MAX_BUFFER_SIZE];
+    int client_choice[2];
+    int choices_received = 0;  // Track the number of clients who have submitted their choices
+    char buffer[MAX_BUFFER_SIZE];  // Declare buffer to store received data
 
     while (1) {
         for (int i = 0; i < connected_clients; i++) {
@@ -97,11 +96,25 @@ int main() {
             }
 
             // Convert choice to integer
-            client_choice = atoi(buffer);
+            client_choice[i] = atoi(buffer);
+            choices_received++;
+        }
 
-            // Play a round and send the result to the client
-            char* result = play_round(client_choice);
-            send(client_socket[i], result, strlen(result), 0);
+        if (choices_received == connected_clients) {
+            // Broadcast choices to both clients
+            send(client_socket[0], (const char*)&client_choice[1], sizeof(int), 0);
+            send(client_socket[1], (const char*)&client_choice[0], sizeof(int), 0);
+
+            // Print broadcasted choices
+            printf("Broadcasted choice to Client 1: %d\n", client_choice[1]);
+            printf("Broadcasted choice to Client 2: %d\n", client_choice[0]);
+
+            choices_received = 0;  // Reset the count for the next round
+
+            // Play a round and send the result to both clients
+            char* result = play_round(client_choice[0], client_choice[1]);
+            send(client_socket[0], result, strlen(result), 0);
+            send(client_socket[1], result, strlen(result), 0);
         }
 
         if (connected_clients == 0) {
