@@ -3,6 +3,7 @@
 #include <string.h>
 #include <winsock2.h>
 
+#define SERVER_IP "127.0.0.1"
 #define PORT 8888
 #define MAX_BUFFER_SIZE 1024
 
@@ -10,6 +11,7 @@ int main() {
     WSADATA wsa;
     SOCKET client_socket;
     struct sockaddr_in server_addr;
+    char buffer[MAX_BUFFER_SIZE];
 
     // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
@@ -27,49 +29,31 @@ int main() {
     // Configure server address
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
 
-    // Connect to the server
+    // Connect to server
     if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
         perror("Error connecting to server");
         return 1;
     }
 
-    printf("Welcome to Rock, Paper, Scissors!\n");
-    printf("Enter 0 for rock, 1 for paper, 2 for scissors.\n");
-    printf("Type \"exit\" to end the game.\n");
+    // Get user input (0, 1, or 2) and send to server
+    int user_choice;
+    printf("Enter your choice (0 for Rock, 1 for Paper, 2 for Scissors): ");
+    scanf("%d", &user_choice);
 
-    char buffer[MAX_BUFFER_SIZE];
+    send(client_socket, (const char*)&user_choice, sizeof(int), 0);
 
-    while (1) {
-        // Get user's choice
-        printf("Enter your choice: ");
-        fgets(buffer, sizeof(buffer), stdin);
-        buffer[strcspn(buffer, "\n")] = '\0';  // Remove newline character
-
-        // Send user's choice to the server
-        send(client_socket, buffer, strlen(buffer), 0);
-
-        // Check for exit command
-        if (strcmp(buffer, "exit") == 0) {
-            // Receive confirmation and exit
-            recv(client_socket, buffer, sizeof(buffer), 0);
-            printf("%s\n", buffer);
-            printf("Exiting the game.\n");
-            break;
-        }
-
-        // Receive and print the result from the server
-        int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-        if (bytes_received <= 0) {
-            break;
-        }
-
-        buffer[bytes_received] = '\0';
-        printf("%s\n", buffer);
+    // Receive and print the result from the server
+    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';  // Ensure null-termination
+        printf("Result from server: %s\n", buffer);
+    } else {
+        perror("Error receiving result from server");
     }
 
-    // Close the connection
+    // Close the socket and cleanup
     closesocket(client_socket);
     WSACleanup();
 
