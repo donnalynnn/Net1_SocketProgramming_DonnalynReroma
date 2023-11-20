@@ -7,17 +7,21 @@
 #define MAX_BUFFER_SIZE 1024
 
 char* play_round(int client_choice1, int client_choice2) {
+    static char resultBuffer[256];  // Static buffer to store the result
+
     if (client_choice1 == client_choice2) {
-        return "It's a tie!";
+        snprintf(resultBuffer, sizeof(resultBuffer), "It's a tie!");
     } else if (
         (client_choice1 == 0 && client_choice2 == 2) ||
         (client_choice1 == 1 && client_choice2 == 0) ||
         (client_choice1 == 2 && client_choice2 == 1)
     ) {
-        return "Client 1 wins!";
+        snprintf(resultBuffer, sizeof(resultBuffer), "Client 1 wins!");
     } else {
-        return "Client 2 wins!";
+        snprintf(resultBuffer, sizeof(resultBuffer), "Client 2 wins!");
     }
+
+    return resultBuffer;
 }
 
 int main() {
