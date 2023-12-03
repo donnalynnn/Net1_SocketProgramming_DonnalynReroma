@@ -40,52 +40,62 @@ int main() {
 
     Player player;
 
-    printf("Enter your name: ");
-    scanf("%49s", player.name);
+    while (1) {
+        printf("Enter your name (or '0' to exit): ");
+        scanf("%s", player.name);
 
-    send(client_socket, player.name, strlen(player.name), 0);
+        if (player.name[0] == '0') {
+            // If '0' is entered, break out of the loop
+            break;
+        }
 
-    int choice;
-    printf("Enter your choice, %s (1 for Rock, 2 for Paper, 3 for Scissors): ", player.name);
-    scanf("%d", &choice);
+        send(client_socket, player.name, strlen(player.name), 0);
 
-    player.choice = choice;
-    send(client_socket, (const char*)&player.choice, sizeof(int), 0);
+        int choice;
+        printf("Enter your choice, %s (1 for Rock, 2 for Paper, 3 for Scissors): ", player.name);
+        scanf("%d", &choice);
 
-    // Receive confirmation from the server
-    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';  // Ensure null-termination
-        if (strcmp(buffer, "OK") != 0) {
-            fprintf(stderr, "Unexpected confirmation from server: %s\n", buffer);
+        player.choice = choice;
+        send(client_socket, (const char*)&player.choice, sizeof(int), 0);
+
+        // Receive confirmation from the server
+        int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+        if (bytes_received > 0) {
+            buffer[bytes_received] = '\0';  // Ensure null-termination
+            if (strcmp(buffer, "OK") != 0) {
+                fprintf(stderr, "Unexpected confirmation from server: %s\n", buffer);
+                closesocket(client_socket);
+                WSACleanup();
+                return 1;
+            }
+        } else {
+            perror("Error receiving confirmation from server");
             closesocket(client_socket);
             WSACleanup();
             return 1;
         }
-    } else {
-        perror("Error receiving confirmation from server");
-        closesocket(client_socket);
-        WSACleanup();
-        return 1;
+
+        // Clear the input buffer
+        fflush(stdin);
+
+        // Receive the result from the server
+        bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+        if (bytes_received > 0) {
+            buffer[bytes_received] = '\0';  // Ensure null-termination
+            printf("Result from server: %s\n", buffer);
+        } else {
+            perror("Error receiving result from server");
+            closesocket(client_socket);
+            WSACleanup();
+            return 1;
+        }
     }
 
-    // Receive the result from the server
-    bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';  // Ensure null-termination
-        printf("Result from server: %s\n", buffer);
-    } else {
-        perror("Error receiving result from server");
-    }
-
+    // Close the socket
     closesocket(client_socket);
     WSACleanup();
-
     return 0;
 }
-
-
-
 
 /*
 cd /d d:
