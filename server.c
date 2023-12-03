@@ -2,133 +2,145 @@
 #include <stdlib.h>
 #include <string.h>
 #include <winsock2.h>
+#include <process.h>
 
 #define PORT 8888
 #define MAX_BUFFER_SIZE 1024
+#define MAX_CLIENTS 2
 
-char* play_round(int client_choice1, int client_choice2) {
-    static char resultBuffer[256];  // Static buffer to store the result
+typedef struct {
+    char name[50];
+    int choice;
+} Player;
 
-    if (client_choice1 == client_choice2) {
+char* play_round(Player player1, Player player2) {
+    static char resultBuffer[256];
+
+    if (player1.choice == player2.choice) {
         snprintf(resultBuffer, sizeof(resultBuffer), "It's a tie!");
     } else if (
-        (client_choice1 == 0 && client_choice2 == 2) ||
-        (client_choice1 == 1 && client_choice2 == 0) ||
-        (client_choice1 == 2 && client_choice2 == 1)
+        (player1.choice == 1 && player2.choice == 3) ||
+        (player1.choice == 2 && player2.choice == 1) ||
+        (player1.choice == 3 && player2.choice == 2)
     ) {
-        snprintf(resultBuffer, sizeof(resultBuffer), "Client 1 wins!");
+        snprintf(resultBuffer, sizeof(resultBuffer), "%s wins!", player1.name);
     } else {
-        snprintf(resultBuffer, sizeof(resultBuffer), "Client 2 wins!");
+        snprintf(resultBuffer, sizeof(resultBuffer), "%s wins!", player2.name);
     }
 
     return resultBuffer;
 }
 
+unsigned int __stdcall handle_client(void* client_socket_ptr) {
+    SOCKET client_socket = *((SOCKET*)client_socket_ptr);
+
+    Player player;
+
+    int bytes_received = recv(client_socket, player.name, sizeof(player.name), 0);
+    if (bytes_received <= 0) {
+        perror("Error receiving player name from client");
+        closesocket(client_socket);
+        _endthreadex(0);
+    }
+
+    player.name[bytes_received] = '\0';
+
+    bytes_received = recv(client_socket, (char*)&player.choice, sizeof(int), 0);
+    if (bytes_received <= 0) {
+        perror("Error receiving player choice from client");
+        closesocket(client_socket);
+        _endthreadex(0);
+    }
+
+    send(client_socket, "OK", strlen("OK"), 0);
+
+    // Print broadcasted choices using printf
+    printf("Broadcasted choice to %s: %d\n", player.name, player.choice);
+
+    // Send the player's choice to the other client
+    send(client_socket, (const char*)&player.choice, sizeof(int), 0);
+
+    _endthreadex(0);
+}
+
 int main() {
     WSADATA wsa;
-    SOCKET server_socket, client_socket[2];
+    SOCKET server_socket, client_socket[MAX_CLIENTS];
     struct sockaddr_in server_addr, client_addr;
     int addr_size = sizeof(client_addr);
     int connected_clients = 0;
+    HANDLE thread_handles[MAX_CLIENTS];
 
-    // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         perror("Error initializing Winsock");
         return 1;
     }
 
-    // Create socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == INVALID_SOCKET) {
         perror("Error creating socket");
         return 1;
     }
 
-    // Configure server address
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
-    // Bind the socket
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
         perror("Error binding socket");
         return 1;
     }
 
-    // Listen for incoming connections
-    if (listen(server_socket, 2) == SOCKET_ERROR) {  // Allow up to 2 connections
+    if (listen(server_socket, MAX_CLIENTS) == SOCKET_ERROR) {
         perror("Error listening for connections");
         return 1;
     }
 
     printf("Waiting for connections...\n");
 
-    // Accept connections from two clients
-    while (connected_clients < 2) {
+    // Accept connections from clients in a loop until 0 is pressed
+    while (1) {
         client_socket[connected_clients] = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
         if (client_socket[connected_clients] == INVALID_SOCKET) {
             perror("Error accepting connection");
-            return 1;
+            continue;
         }
 
         printf("Connected by %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+        // Start a new thread to handle the client
+        thread_handles[connected_clients] = (HANDLE)_beginthreadex(NULL, 0, &handle_client, &client_socket[connected_clients], 0, NULL);
+
+        // Increment the number of connected clients
         connected_clients++;
-    }
 
-    int client_choice[2];
-    int choices_received = 0;  // Track the number of clients who have submitted their choices
-    char buffer[MAX_BUFFER_SIZE];  // Declare buffer to store received data
+        // Check if maximum clients reached or continue accepting
+        if (connected_clients >= MAX_CLIENTS) {
+            printf("Maximum clients reached. Press 0 to exit.\n");
 
-    while (1) {
-        for (int i = 0; i < connected_clients; i++) {
-            // Receive client's choice
-            int bytes_received = recv(client_socket[i], buffer, sizeof(buffer), 0);
-            if (bytes_received <= 0) {
+            // Wait for all threads to finish
+            WaitForMultipleObjects(connected_clients, thread_handles, TRUE, INFINITE);
+
+            // Close the sockets
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                closesocket(client_socket[i]);
+            }
+
+            connected_clients = 0;
+
+            // Check if '0' is pressed to exit the loop
+            char input;
+            scanf(" %c", &input);
+            if (input == '0') {
                 break;
             }
-
-            buffer[bytes_received] = '\0';
-
-            // Check for exit command
-            if (strcmp(buffer, "exit") == 0) {
-                // Send confirmation and exit
-                send(client_socket[i], "exit", strlen("exit"), 0);
-                printf("Client %d has requested to exit. Confirming...\n", i + 1);
-                connected_clients--;
-                closesocket(client_socket[i]);
-                continue;
-            }
-
-            // Convert choice to integer
-            client_choice[i] = atoi(buffer);
-            choices_received++;
-        }
-
-        if (choices_received == connected_clients) {
-            // Broadcast choices to both clients
-            send(client_socket[0], (const char*)&client_choice[1], sizeof(int), 0);
-            send(client_socket[1], (const char*)&client_choice[0], sizeof(int), 0);
-
-            // Print broadcasted choices
-            printf("Broadcasted choice to Client 1: %d\n", client_choice[1]);
-            printf("Broadcasted choice to Client 2: %d\n", client_choice[0]);
-
-            choices_received = 0;  // Reset the count for the next round
-
-            // Play a round and send the result to both clients
-            char* result = play_round(client_choice[0], client_choice[1]);
-            send(client_socket[0], result, strlen(result), 0);
-            send(client_socket[1], result, strlen(result), 0);
-        }
-
-        if (connected_clients == 0) {
-            // All clients have exited, break the loop
-            break;
         }
     }
 
     // Close the server socket
     closesocket(server_socket);
+
+    // Cleanup and close Winsock
     WSACleanup();
 
     return 0;
