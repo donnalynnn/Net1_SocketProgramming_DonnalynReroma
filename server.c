@@ -1,146 +1,219 @@
+// server.c
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <winsock2.h>
-#include <process.h>
+#include <time.h>
+#pragma comment(lib, "ws2_32.lib")
 
-#define PORT 8888
-#define MAX_BUFFER_SIZE 1024
-#define MAX_CLIENTS 2
+#define PORT 5555
 
-typedef struct {
-    char name[50];
-    int choice;
-} Player;
+// Enumeration for game choices
+enum GameChoice {
+    ROCK = 1,
+    PAPER = 2,
+    SCISSORS = 3
+};
 
-char* play_round(Player player1, Player player2) {
-    static char resultBuffer[256];
-
-    if (player1.choice == player2.choice) {
-        snprintf(resultBuffer, sizeof(resultBuffer), "It's a tie!");
-    } else if (
-        (player1.choice == 1 && player2.choice == 3) ||
-        (player1.choice == 2 && player2.choice == 1) ||
-        (player1.choice == 3 && player2.choice == 2)
-    ) {
-        snprintf(resultBuffer, sizeof(resultBuffer), "%s wins!", player1.name);
+// Function to determine the game result
+int determine_game_result(int choice1, int choice2) {
+    if (choice1 == choice2) {
+        return 0; // Draw
+    } else if ((choice1 == ROCK && choice2 == SCISSORS) ||
+               (choice1 == PAPER && choice2 == ROCK) ||
+               (choice1 == SCISSORS && choice2 == PAPER)) {
+        return 1; // Player 1 wins
     } else {
-        snprintf(resultBuffer, sizeof(resultBuffer), "%s wins!", player2.name);
+        return 2; // Player 2 wins
     }
-
-    return resultBuffer;
 }
 
-unsigned int __stdcall handle_client(void* client_socket_ptr) {
-    SOCKET client_socket = *((SOCKET*)client_socket_ptr);
+// Function to handle a single game between two players
+void play_game(SOCKET player1_socket, SOCKET player2_socket) {
+    char buffer[1024];
+    int player1_choice, player2_choice;
+    int result;
 
-    Player player;
+    // Inform both players that the game is starting
+    send(player1_socket, "Both players are connected. The game is starting!", sizeof(buffer), 0);
+    send(player2_socket, "Both players are connected. The game is starting!", sizeof(buffer), 0);
 
-    int bytes_received = recv(client_socket, player.name, sizeof(player.name), 0);
-    if (bytes_received <= 0) {
-        perror("Error receiving player name from client");
-        closesocket(client_socket);
-        _endthreadex(0);
+    // Game loop
+    while (1) {
+        int dataRev=0;
+        int bytesReceived;
+        // Get Player 1's choice
+        send(player1_socket, "Make your move (rock=1/paper=2/scissors=3, enter '0' to quit):", sizeof(buffer), 0);
+        recv(player1_socket, buffer, sizeof(buffer), 0);
+
+        bytesReceived = recv(player1_socket, buffer, sizeof(buffer), 0);
+        if (bytesReceived >= 0 && bytesReceived <= 3)
+            dataRev=0;
+        // Check if Player 1 wants to quit
+        player1_choice = atoi(buffer);
+        if (player1_choice == 0) {
+            break;
+        }
+
+        // Get Player 2's choice
+        send(player2_socket, "Make your move (rock=1/paper=2/scissors=3, enter '0' to quit):", sizeof(buffer), 0);
+        recv(player2_socket, buffer, sizeof(buffer), 0);
+
+        bytesReceived = recv(player2_socket, buffer, sizeof(buffer), 0);
+        if (bytesReceived >= 0 && bytesReceived <= 3)
+            dataRev=1;
+
+        // Check if Player 2 wants to quit
+        player2_choice = atoi(buffer);
+        if (player2_choice == 0) {
+            break;
+        }
+
+        send(player1_socket, (char*)&dataRev, sizeof(dataRev), 0);
+        send(player2_socket, (char*)&dataRev, sizeof(dataRev), 0);
+
+        if(dataRev!=0){
+        // Send choices to players
+        sprintf(buffer, "Player 1 chose: %d", player1_choice);
+        send(player1_socket, buffer, sizeof(buffer), 0);
+
+        sprintf(buffer, "Player 2 chose: %d", player2_choice);
+        send(player2_socket, buffer, sizeof(buffer), 0);
+
+        // Determine the result and send it to both players
+        result = determine_game_result(player1_choice, player2_choice);
+        if (result == 0) {
+            send(player1_socket, "It's a draw!", sizeof(buffer), 0);
+            send(player2_socket, "It's a draw!", sizeof(buffer), 0);
+        } else if (result == 1) {
+            send(player1_socket, "Player 1 wins!", sizeof(buffer), 0);
+            send(player2_socket, "Player 1 wins!", sizeof(buffer), 0);
+        } else {
+            send(player1_socket, "Player 2 wins!", sizeof(buffer), 0);
+            send(player2_socket, "Player 2 wins!", sizeof(buffer), 0);
+        }
+
+        }else{
+            send(player1_socket, "Wait for the other player...", sizeof(buffer), 0);
+            send(player2_socket, "Wait for the other player...", sizeof(buffer), 0);
+        }
+    }
+}
+
+
+// Function to handle a single client connection
+void handle_client(SOCKET client_socket, int player_number) {
+    char buffer[1024];
+
+    // Inform the player about their number
+    sprintf(buffer, "You are Player %d. Waiting for the other player to connect...", player_number);
+    send(client_socket, buffer, sizeof(buffer), 0);
+
+    // Wait for the other player to connect
+    if (player_number == 1) {
+        send(client_socket, "Waiting for Player 2 to connect...", sizeof(buffer), 0);
+    } else {
+        send(client_socket, "Waiting for Player 1 to make a move...", sizeof(buffer), 0);
     }
 
-    player.name[bytes_received] = '\0';
+    // Accept the other player's connection
+    SOCKET other_player_socket;
+    struct sockaddr_in other_player_addr;
+    int other_player_len = sizeof(other_player_addr);
 
-    bytes_received = recv(client_socket, (char*)&player.choice, sizeof(int), 0);
-    if (bytes_received <= 0) {
-        perror("Error receiving player choice from client");
-        closesocket(client_socket);
-        _endthreadex(0);
+    other_player_socket = accept(client_socket, (struct sockaddr*)&other_player_addr, &other_player_len);
+    printf("Player %d connected\n", 3 - player_number);
+
+    // Inform both players that the game is starting
+    sprintf(buffer, "Both players are connected. The game is starting!");
+    send(client_socket, buffer, sizeof(buffer), 0);
+    send(other_player_socket, buffer, sizeof(buffer), 0);
+
+    // Play the game
+    if (player_number == 1) {
+        play_game(client_socket, other_player_socket);
+    } else {
+        play_game(other_player_socket, client_socket);
     }
 
-    send(client_socket, "OK", strlen("OK"), 0);
-
-    // Print broadcasted choices using printf
-    printf("Broadcasted choice to %s: %d\n", player.name, player.choice);
-
-    // Send the player's choice to the other client
-    send(client_socket, (const char*)&player.choice, sizeof(int), 0);
-
-    _endthreadex(0);
+    // Close the connection for both players
+    closesocket(client_socket);
+    closesocket(other_player_socket);
 }
 
 int main() {
     WSADATA wsa;
-    SOCKET server_socket, client_socket[MAX_CLIENTS];
-    struct sockaddr_in server_addr, client_addr;
-    int addr_size = sizeof(client_addr);
-    int connected_clients = 0;
-    HANDLE thread_handles[MAX_CLIENTS];
+    SOCKET server_socket;
+    struct sockaddr_in server_addr;
 
+    // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        perror("Error initializing Winsock");
+        printf("Failed to initialize Winsock");
         return 1;
     }
 
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket == INVALID_SOCKET) {
-        perror("Error creating socket");
+    // Create socket
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+        printf("Failed to create socket");
         return 1;
     }
 
+    // Prepare the sockaddr_in structure
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
-
+    server_addr.sin_port = htons(PORT);
+    char buffer[1024];
+    // Bind the socket
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        perror("Error binding socket");
+        printf("Bind failed");
         return 1;
     }
 
-    if (listen(server_socket, MAX_CLIENTS) == SOCKET_ERROR) {
-        perror("Error listening for connections");
-        return 1;
+    // Listen to incoming connections
+    listen(server_socket, 2);
+
+    printf("Server listening on port %d\n", PORT);
+
+    // Accept connections for Player 1 and Player 2
+    SOCKET player1_socket, player2_socket;
+    struct sockaddr_in player1_addr, player2_addr;
+    int player1_len = sizeof(player1_addr);
+    int player2_len = sizeof(player2_addr);
+
+    int player1_connected = 0;
+    int player2_connected = 0;
+
+    // Accept Player 1
+    player1_socket = accept(server_socket, (struct sockaddr*)&player1_addr, &player1_len);
+    printf("Player 1 connected\n");
+
+    // Inform Player 1 to wait for Player 2
+    sprintf(buffer, "You are Player 1. Waiting for Player 2 to connect...");
+    send(player1_socket, buffer, sizeof(buffer), 0);
+
+    // Accept Player 2
+    player2_socket = accept(server_socket, (struct sockaddr*)&player2_addr, &player2_len);
+    printf("Player 2 connected\n");
+
+    // Inform Player 2 to wait for Player 1 and inform Player 1 that the game is starting
+    sprintf(buffer, "You are Player 2. Waiting for Player 1 to make a move...");
+    send(player2_socket, buffer, sizeof(buffer), 0);
+    sprintf(buffer, "Player 2 has joined. The game is starting!");
+    send(player1_socket, buffer, sizeof(buffer), 0);
+
+    // Set flags to indicate both players are connected
+    player1_connected = 1;
+    player2_connected = 1;
+
+    // Handle the game for both players
+    if (player1_connected && player2_connected) {
+        handle_client(player1_socket, 1);
+        handle_client(player2_socket, 2);
     }
 
-    printf("Waiting for connections...\n");
-
-    // Accept connections from clients in a loop until 0 is pressed
-    while (1) {
-        client_socket[connected_clients] = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
-        if (client_socket[connected_clients] == INVALID_SOCKET) {
-            perror("Error accepting connection");
-            continue;
-        }
-
-        printf("Connected by %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-
-        // Start a new thread to handle the client
-        thread_handles[connected_clients] = (HANDLE)_beginthreadex(NULL, 0, &handle_client, &client_socket[connected_clients], 0, NULL);
-
-        // Increment the number of connected clients
-        connected_clients++;
-
-        // Check if maximum clients reached or continue accepting
-        if (connected_clients >= MAX_CLIENTS) {
-            printf("Maximum clients reached. Press 0 to exit.\n");
-
-            // Wait for all threads to finish
-            WaitForMultipleObjects(connected_clients, thread_handles, TRUE, INFINITE);
-
-            // Close the sockets
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                closesocket(client_socket[i]);
-            }
-
-            connected_clients = 0;
-
-            // Check if '0' is pressed to exit the loop
-            char input;
-            scanf(" %c", &input);
-            if (input == '0') {
-                break;
-            }
-        }
-    }
-
-    // Close the server socket
+    // Cleanup Winsock
     closesocket(server_socket);
-
-    // Cleanup and close Winsock
     WSACleanup();
 
     return 0;
