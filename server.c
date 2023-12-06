@@ -19,6 +19,18 @@ void play_game(SOCKET player1_socket, SOCKET player2_socket) {
         recv(player1_socket, (char*)&player1_choice, sizeof(player1_choice), 0);
         recv(player2_socket, (char*)&player2_choice, sizeof(player2_choice), 0);
 
+        // // Check if either player wants to quit
+        // if (player1_choice == 0 || player2_choice == 0) {
+        //     if (player1_choice == 0) {
+        //         sprintf(buffer, "Other player quit. You win!");
+        //         send(player2_socket, buffer, sizeof(buffer), 0);
+        //     } else {
+        //         sprintf(buffer, "Other player quit. You win!");
+        //         send(player1_socket, buffer, sizeof(buffer), 0);
+        //     }
+        //     break;
+        // }
+
         // Send player2's choice to player1 and vice versa
         sprintf(buffer, "Player 2 chose: %d", player2_choice);
         send(player1_socket, buffer, sizeof(buffer), 0);

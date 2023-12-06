@@ -21,6 +21,13 @@ void play_game(SOCKET client_socket) {
         // Send user input to the server
         send(client_socket, (char*)&choice, sizeof(choice), 0);
 
+        // // Check if the other player has quit
+        // recv(client_socket, buffer, sizeof(buffer), 0);
+        // if (strcmp(buffer, "Other player quit. You win!") == 0) {
+        //     printf("%s\n", buffer);
+        //     break;
+        // }
+
         // Check if the user wants to quit
         if (choice == 0) {
             break;
@@ -33,6 +40,8 @@ void play_game(SOCKET client_socket) {
         // Receive the game result from the server
         recv(client_socket, buffer, sizeof(buffer), 0);
         printf("%s\n", buffer);
+
+        
     }
 }
 
@@ -56,7 +65,7 @@ int main() {
 
     // Prepare the sockaddr_in structure
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Change this to the server's IP address
+    server_addr.sin_addr.s_addr = inet_addr("192.168.101.6"); // Change this to the server's IP address
     server_addr.sin_port = htons(PORT);
 
     // Connect to server
