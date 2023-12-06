@@ -1,60 +1,38 @@
-// client.c
-
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <winsock2.h>
+
 #pragma comment(lib, "ws2_32.lib")
 
 #define PORT 5555
 
 void play_game(SOCKET client_socket) {
     char buffer[1024];
+    int choice;
 
-    // Inform both players that the game is starting
-        recv(client_socket, buffer, sizeof(buffer), 0);
-        printf("%s", buffer);
-
-    // Game loop
     while (1) {
-        recv(client_socket, buffer, sizeof(buffer), 0);
-        printf("%s\n", buffer);
-
-        // Receive and display game instructions
+        // Receive game instructions from the server
         recv(client_socket, buffer, sizeof(buffer), 0);
         printf("%s", buffer);
+
         // Get user input
-        int choice;
+        printf("Enter your choice (rock=1/paper=2/scissors=3, enter '0' to quit): ");
         scanf("%d", &choice);
 
         // Send user input to the server
-        sprintf(buffer, "%d", choice);
-        send(client_socket, buffer, sizeof(buffer), 0);
-
-        //flagging
-        send(client_socket, buffer, sizeof(buffer), 0);
+        send(client_socket, (char*)&choice, sizeof(choice), 0);
 
         // Check if the user wants to quit
         if (choice == 0) {
             break;
         }
-        
-        
-        int data=recv(client_socket, (char*)&data, sizeof(data), 0);
-        
-        if(data!=0){
-            // Receive and display the opponent's move
-            recv(client_socket, buffer, sizeof(buffer), 0);
-            printf("%s\n", buffer);
 
-            // Receive and display the game result
-            recv(client_socket, buffer, sizeof(buffer), 0);
-            printf("%s\n", buffer);
-        }else{
-            recv(client_socket, buffer, sizeof(buffer), 0);
-            printf("%s\n", buffer);
-        }
-        
+        // Receive the opponent's move from the server
+        recv(client_socket, buffer, sizeof(buffer), 0);
+        printf("%s\n", buffer);
+
+        // Receive the game result from the server
+        recv(client_socket, buffer, sizeof(buffer), 0);
+        printf("%s\n", buffer);
     }
 }
 
@@ -87,11 +65,7 @@ int main() {
         return 1;
     }
 
-    // Inform the client that the game is starting
-    recv(client_socket, buffer, sizeof(buffer), 0);
-    printf("%s\n", buffer);
-
-
+    // Receive the initial message from the server
     recv(client_socket, buffer, sizeof(buffer), 0);
     printf("%s\n", buffer);
 
@@ -104,7 +78,6 @@ int main() {
 
     return 0;
 }
-
 
 
 /*
