@@ -5,13 +5,29 @@
 
 #define PORT 5555
 
+const char* get_choice_name(int choice) {
+    switch (choice) {
+        case 1:
+            return "ROCK";
+        case 2:
+            return "PAPER";
+        case 3:
+            return "SCISSORS";
+        case 0:
+            return "QUIT";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 void play_game(SOCKET player1_socket, SOCKET player2_socket) {
     char buffer[1024];
     int player1_choice, player2_choice;
+    int player1_score = 0, player2_score = 0;
 
     while (1) {
         // Send game instructions to both players
-        sprintf(buffer, "Make your move (rock=1/paper=2/scissors=3, enter '0' to quit): ");
+        sprintf(buffer, "ROCK=1\nPAPER=2\nSCISSORS=3\n'0' to quit\n");
         send(player1_socket, buffer, sizeof(buffer), 0);
         send(player2_socket, buffer, sizeof(buffer), 0);
 
@@ -32,10 +48,14 @@ void play_game(SOCKET player1_socket, SOCKET player2_socket) {
         // }
 
         // Send player2's choice to player1 and vice versa
-        sprintf(buffer, "Player 2 chose: %d", player2_choice);
+        sprintf(buffer, "You chose: %s", get_choice_name(player1_choice));
+        send(player1_socket, buffer, sizeof(buffer), 0);
+        sprintf(buffer, "Player 2 chose: %s", get_choice_name(player2_choice));
         send(player1_socket, buffer, sizeof(buffer), 0);
 
-        sprintf(buffer, "Player 1 chose: %d", player1_choice);
+        sprintf(buffer, "You chose: %s", get_choice_name(player2_choice));
+        send(player2_socket, buffer, sizeof(buffer), 0);
+        sprintf(buffer, "Player 1 chose: %s", get_choice_name(player1_choice));
         send(player2_socket, buffer, sizeof(buffer), 0);
 
         // Determine game result and send it to both players
@@ -46,12 +66,16 @@ void play_game(SOCKET player1_socket, SOCKET player2_socket) {
                    (player1_choice == 2 && player2_choice == 1) ||
                    (player1_choice == 3 && player2_choice == 2)) {
             result = 1; // Player 1 wins
+            player1_score++;
         } else {
             result = 2; // Player 2 wins
+            player2_score++;
         }
 
         // Send the result to both players
-        sprintf(buffer, "Game result: %s", (result == 0) ? "Tie" : (result == 1) ? "Player 1 wins" : "Player 2 wins");
+        sprintf(buffer, "Game result: %s.  |  Scores - Player 1: %d, Player 2: %d\n==============================================================\n", 
+                (result == 0) ? "Tie" : (result == 1) ? "Player 1 wins" : "Player 2 wins",
+                player1_score, player2_score);
         send(player1_socket, buffer, sizeof(buffer), 0);
         send(player2_socket, buffer, sizeof(buffer), 0);
 
@@ -112,8 +136,11 @@ int main() {
     // Inform Player 2 to wait for Player 1 and inform Player 1 that the game is starting
     sprintf(buffer, "You are Player 2. Waiting for Player 1 to make a move...");
     send(player2_socket, buffer, sizeof(buffer), 0);
-    sprintf(buffer, "Player 2 has joined. The game is starting!");
+
+    sprintf(buffer, "The game is starting!\n");
     send(player1_socket, buffer, sizeof(buffer), 0);
+    sprintf(buffer, "The game is starting!\n");
+    send(player2_socket, buffer, sizeof(buffer), 0);
 
     // Set flags to indicate both players are connected
     int player1_connected = 1;

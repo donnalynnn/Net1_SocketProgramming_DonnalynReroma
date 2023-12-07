@@ -14,8 +14,8 @@ void play_game(SOCKET client_socket) {
         recv(client_socket, buffer, sizeof(buffer), 0);
         printf("%s", buffer);
 
-        // Get user input
-        printf("Enter your choice (rock=1/paper=2/scissors=3, enter '0' to quit): ");
+        // Get user input ✋ ✊ ✌️
+        printf("\nMake a move: ");
         scanf("%d", &choice);
 
         // Send user input to the server
@@ -33,7 +33,9 @@ void play_game(SOCKET client_socket) {
             break;
         }
 
-        // Receive the opponent's move from the server
+        // Receive the opponent's move from the server & player's onw choice
+        recv(client_socket, buffer, sizeof(buffer), 0);
+        printf("%s\n", buffer);
         recv(client_socket, buffer, sizeof(buffer), 0);
         printf("%s\n", buffer);
 
@@ -78,6 +80,10 @@ int main() {
     recv(client_socket, buffer, sizeof(buffer), 0);
     printf("%s\n", buffer);
 
+    //the game is starting
+    recv(client_socket, buffer, sizeof(buffer), 0);
+    printf("%s\n", buffer);
+
     // Play the game
     play_game(client_socket);
 
@@ -88,12 +94,10 @@ int main() {
     return 0;
 }
 
-
 /*
 cd /d d:
 cd D:\Donna-sama\USJR\3RD YEAR\Net 1\SP_SocketProg
 taskkill /im server.exe /t /f
 gcc -o server.exe server.c -lws2_32
 gcc -o client.exe client.c -lws2_32
-
 */
