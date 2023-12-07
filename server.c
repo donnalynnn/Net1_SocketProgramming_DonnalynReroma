@@ -20,6 +20,7 @@ const char* get_choice_name(int choice) {
     }
 }
 
+
 void play_game(SOCKET player1_socket, SOCKET player2_socket) {
     char buffer[1024];
     int player1_choice, player2_choice;
@@ -47,6 +48,23 @@ void play_game(SOCKET player1_socket, SOCKET player2_socket) {
         //     break;
         // }
 
+        // Check if either player wants to quit
+        if (player1_choice == 0 || player2_choice == 0) {
+
+            if(player1_choice == 0){
+                sprintf(buffer, "Other player ended the game.\n");
+                send(player2_socket, buffer, sizeof(buffer), 0);
+            }
+
+            if(player2_choice == 0){
+                sprintf(buffer, "Other player ended the game.\n");
+                send(player1_socket, buffer, sizeof(buffer), 0);
+            }
+
+            break;
+            
+        }
+
         // Send player2's choice to player1 and vice versa
         sprintf(buffer, "You chose: %s", get_choice_name(player1_choice));
         send(player1_socket, buffer, sizeof(buffer), 0);
@@ -60,20 +78,24 @@ void play_game(SOCKET player1_socket, SOCKET player2_socket) {
 
         // Determine game result and send it to both players
         int result;
-        if (player1_choice == player2_choice) {
+        if ((player1_choice == player2_choice) || 
+            ((player2_choice > 3 || player2_choice < 0) && (player1_choice > 3 || player1_choice < 0))) {
             result = 0; // Tie
         } else if ((player1_choice == 1 && player2_choice == 3) ||
                    (player1_choice == 2 && player2_choice == 1) ||
                    (player1_choice == 3 && player2_choice == 2)) {
             result = 1; // Player 1 wins
             player1_score++;
-        } else {
+        } else if(player2_choice > 3 || player2_choice < 0){
+            result = 1; // Player 1 wins
+            player1_score++;
+        }else{
             result = 2; // Player 2 wins
             player2_score++;
         }
 
         // Send the result to both players
-        sprintf(buffer, "Game result: %s.  |  Scores - Player 1: %d, Player 2: %d\n==============================================================\n", 
+        sprintf(buffer, "Game result: %s.  |  Scores - Player 1: %d, Player 2: %d\n=================================================================\n", 
                 (result == 0) ? "Tie" : (result == 1) ? "Player 1 wins" : "Player 2 wins",
                 player1_score, player2_score);
         send(player1_socket, buffer, sizeof(buffer), 0);
@@ -151,7 +173,8 @@ int main() {
         play_game(player1_socket, player2_socket);
     }
 
-    // Cleanup Winsock
+    closesocket(player2_socket);
+    closesocket(player1_socket);
     closesocket(server_socket);
     WSACleanup();
 

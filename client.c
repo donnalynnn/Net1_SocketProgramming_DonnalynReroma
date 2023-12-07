@@ -28,8 +28,11 @@ void play_game(SOCKET client_socket) {
         //     break;
         // }
 
-        // Check if the user wants to quit
+        /// Check if the user wants to quit
         if (choice == 0) {
+            // Receive quit confirmation from the server
+            int confirmation;
+            recv(client_socket, (char*)&confirmation, sizeof(confirmation), 0);
             break;
         }
 
